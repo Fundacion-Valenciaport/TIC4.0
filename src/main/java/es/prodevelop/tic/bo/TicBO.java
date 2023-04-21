@@ -32,6 +32,7 @@
 
 package es.prodevelop.tic.bo;
 
+import java.io.Console;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -461,12 +462,12 @@ public class TicBO {
 		return messages;
 	}
 	
-	public static JsonObject buildMessage(JsonObject object, String idField) throws Exception{ 
-		
+	public static JsonObject buildMessage(JsonObject object, String idField) throws Exception {
 		// Message to build
-		JsonObject treeObject = new JsonObject();	
+		JsonObject treeObject = new JsonObject();
 		
-		try {			
+		try {
+			// For each attribute found in the message
 			object.keySet().forEach(key -> {
 				String[] path = key.split("[.]");
 				JsonElement parent = treeObject;
@@ -474,6 +475,7 @@ public class TicBO {
 				
 				HashMap<String, String> keyFieldMap = new HashMap<String, String>();
 				
+				// For each level of the path
 				for(int i = 0; i < path.length; i++) {
 					// If it is an id path
 					if(path[i].startsWith(Configuration.get("MARKER_ID"))) {
@@ -510,31 +512,24 @@ public class TicBO {
 						}
 						keyFieldMap.put(pathToFieldMap.get(path[i]), path[i]);
 					}
-					// If it as a value that was added into the path
-					else if(path[i].startsWith(Configuration.get("MARKER_UNIT"))) {
+					// If it is a value that was added into the path but with not limited values
+					else if(path[i].startsWith(Configuration.get("MARKER_KEYFIELD"))) {
 						// If the parent is an object, change it to Array
 						if(parent.isJsonObject()) {
 							parent = new JsonArray();
 							grandparent.getAsJsonObject().add(path[i-1], parent);
 						}
-						keyFieldMap.put("unit", path[i].substring(1));
+						String[] keyAndValue = path[i].split(Configuration.get("MARKER_KEYFIELD"));
+						keyFieldMap.put(keyAndValue[1], keyAndValue.length > 2 ? keyAndValue[2] : null);
 					}
-					// If it as a value that was added into the path
-					else if(path[i].startsWith(Configuration.get("MARKER_REFERENCE"))) {
-						// If the parent is an object, change it to Array
-						if(parent.isJsonObject()) {
-							parent = new JsonArray();
-							grandparent.getAsJsonObject().add(path[i-1], parent);
-						}
-						keyFieldMap.put("reference", path[i].substring(1));
-					}
-					// Add path fields to the object when having a value 
+					// Add path fields to the object when having a value
 					else if(keyFieldMap.size() > 0) {
 						boolean found = false;
 						for(JsonElement e : parent.getAsJsonArray()) {
 							boolean match = true;
 							for(String k : keyFieldMap.keySet()) {
-								if(!keyFieldMap.get(k).equals(JsonUtils.getAsString(e.getAsJsonObject(), k))){
+								if(keyFieldMap.get(k) == null && JsonUtils.getAsString(e.getAsJsonObject(), k) != null
+										|| keyFieldMap.get(k) != null && !keyFieldMap.get(k).equals(JsonUtils.getAsString(e.getAsJsonObject(), k))){
 									match = false;
 									break;
 								}
@@ -555,22 +550,27 @@ public class TicBO {
 							grandparent = parent;
 							parent.getAsJsonArray().add(o);
 							parent = o;
-						}						
+						}
 					}
 					// Just parent and child
 					else {
+						// If the object does not exist yet
 						if(parent.getAsJsonObject().get(path[i]) == null) {
+							// Create as an object if is part of the path or set the value if it is the last slice
 							parent.getAsJsonObject().add(path[i], i < path.length - 1 ? new JsonObject() : object.get(key));
 						}
+						// Set new grandparent and parent
 						grandparent = parent; 
 						parent = parent.getAsJsonObject().get(path[i]);
-					}					
-				}			
-		    });		
+					}
+				}
+			});
 		}
 		catch(Exception e) {
 			logger.error("Error in buildMessage: " + e.toString());
 		}		
 		return treeObject;
 	}
+	
+	
 }
